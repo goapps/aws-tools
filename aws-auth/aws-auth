@@ -1,0 +1,143 @@
+#!/bin/bash -
+#
+# Authenticate for aws-cli
+#
+AWS_CLI=`which aws`
+if [ $? -ne 0 ]; then
+    printf "❌ AWS CLI is not installed; exiting\n"
+    exit 1
+fi
+
+VERSION=0.1
+MFA_ROLE=
+PROFILE=
+IAM_USER=
+TOKEN=
+DEFAULT=
+DURATION=129600
+OVERRIDE_PROFILE=0
+
+if [ $# -gt 0 ] && [ "${1:0:1}" == "-" ]; then
+
+    while getopts 'p:t:hv' OPTION
+        do
+        case $OPTION in
+        p)    PROFILE="$OPTARG"
+              if [ $AWS_PROFILE ] && [ "$PROFILE" != "$AWS_PROFILE" ]; then
+                  OVERRIDE_PROFILE=1
+              fi
+              ;;
+        t)    TOKEN="$OPTARG"
+              ;;
+        h)    printf "\n"
+              exit 1
+              ;;
+        v)    printf "Version: $VERSION\n"
+              exit 1
+              ;;
+        '?')  printf "❌ Error: invalid option -$OPTARG\n" >&2
+              printf "❌ Error: [-p aws-profile] [-a access-token]\n" >&2
+              exit 1
+              ;;
+        esac
+    done
+else
+    if [ $# == 0 ]; then
+        read -p 'Token ' TOKEN
+        exit 1
+    else 
+        TOKEN=$1
+    fi
+
+    # Check $AWS_PROFILE isn't set and ""
+    # Check $PROFILE EXISTS   
+    # default / default-mfa
+    PROFILE=$AWS_PROFILE
+fi 
+
+if [[ ${PROFILE} =~ -mfa$ ]]; then
+    # Check if profile set to mfa profile as you can't auth on this profile
+    # using replace remove '-mfa'.
+    PROFILE="${PROFILE/-mfa/}"
+elif [ $OVERRIDE_PROFILE == 0 ] && [ $AWS_PROFILE ] && [ -z $AWS_PROFILE ]; then
+    # Check if ENV set and is empty as an empty profile causes an error
+    printf "❌ Error: Make sure to unset \$AWS_PROFILE ENV if empty.\n"
+    exit 1
+elif [ -z "$PROFILE" ]; then
+    # Look for empty profile and set default profile
+    PROFILE="default"
+    #elif [ -z $AWS_PROFILE ]; then
+    #  echo "❌ Error: \$AWS_PROFILE can not be empty"
+    #  echo "   - Either set a profile or unset \$AWS_PROFILE"
+    #  exit 1
+fi
+
+# Set the mfa profile
+MFA_ROLE="$PROFILE-mfa"
+printf "✅ Profile:\t$PROFILE\n"
+
+export AWS_PROFILE_TEMP=$AWS_PROFILE
+unset AWS_PROFILE
+
+# Check profile exists in config
+SERIAL_NUMBER=$(aws --profile $PROFILE configure get mfa_serial >> dev/null 2>&1)
+if [ $? -ne 0 ]; then
+    printf "❌ Error: Profile $PROFILE isn't configured in ~/.aws/config\n"
+    exit 1
+fi
+
+# Check profile mfa serial 
+SERIAL_NUMBER=$(aws --profile $PROFILE configure get mfa_serial)
+if [ $? -ne 0 ] || [ -z "$SERIAL_NUMBER" ]; then
+    # Check mfa_serial doesn't exist
+    printf "❌ Error: Add mfa_serial ENV to $PROFILE profile\n"
+    printf "   - aws configure set mfa_serial <mfa_serial>\n"
+    exit 1
+else
+    printf "✅ MFA:\t\t$SERIAL_NUMBER\n"
+fi
+
+# Check access key present
+KEY_PRESENT=`aws --profile $PROFILE configure get aws_access_key_id`
+
+if [ $? -ne 0 ] || [ -z "$KEY_PRESENT" ]; then
+    # Check access key doesn't exist
+    printf "❌ Error: Missing aws_access_key_id\n"
+    printf "   - aws configure set aws_access_key_id <key>\n"
+    exit 1
+else 
+    printf "✅ ACCESS KEY:\t$KEY_PRESENT\n"
+fi
+
+# Check secret present
+SECRET_PRESENT=`aws --profile $PROFILE configure get aws_secret_access_key`
+if [ $? -ne 0 ] || [ -z "$SECRET_PRESENT" ]; then
+    # Check secret key doesn't exist
+    printf "❌ Error: Missing aws_secret_access_key\n" 
+    printf "   - aws configure set aws_secret_access_key <secret>\n"
+    exit 1
+else
+    SEC_OBSCURE=${SECRET_PRESENT:${#SECRET_PRESENT}-3:${#SECRET_PRESENT}}
+    printf "✅ SECRET:\t*****************$SEC_OBSCURE\n"
+fi
+
+read AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN <<< \
+$( aws sts --profile $PROFILE get-session-token \
+    --duration-seconds $DURATION  \
+    --serial-number "$SERIAL_NUMBER" \
+    --token-code $TOKEN \
+    --output text | awk '{ print $2, $4, $5 }')
+
+if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+    printf "❌ Error: Access key not generated\n"
+    exit 1
+fi
+
+`aws --profile "$MFA_ROLE" configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"`
+`aws --profile "$MFA_ROLE" configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"`
+`aws --profile "$MFA_ROLE" configure set aws_session_token "$AWS_SESSION_TOKEN"`
+if [ $OVERRIDE_PROFILE == 0 ] && [ "$AWS_PROFILE_TEMP" == "$MFA_ROLE" ]; then
+    printf "\$AWS_PROFILE is set, off you go :-)\n"
+else
+    printf "Set \$AWS_PROFILE to $MFA_ROLE to use 2FA account, and off you go :-).\n"
+fi
