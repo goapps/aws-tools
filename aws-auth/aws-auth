@@ -5,7 +5,7 @@
 AWS_CLI=`which aws`
 if [ $? -ne 0 ]; then
     printf "❌ AWS CLI is not installed; exiting\n"
-    exit 1
+    exit 10
 fi
 
 VERSION=0.1
@@ -17,8 +17,32 @@ DEFAULT=
 DURATION=129600
 OVERRIDE_PROFILE=0
 
-if [ $# -gt 0 ] && [ "${1:0:1}" == "-" ]; then
+function checkProfile(){
+    PROFILE=$1
+    # does profile exist and not empty?
+    if [ $PROFILE ] || [ -z "$PROFILE" ] || [ "$PROFILE" == "" ]; then
+        echo "Profile not found"
+        exit 11
+    else
+        echo "Profile found: $PROFILE"
+    fi
 
+    # if [ $PROFILE ] && [ "$PROFILE" != "$AWS_PROFILE" ]; then
+    #     OVERRIDE_PROFILE=1
+    # fi
+}
+
+# Pre flight checks
+# 1. is AWS installed (exit code 10)
+# 2. has a profile been set (exit code 11)
+# 2a AWS_PROFILE set
+# 2b -p supplied
+# 3. does the selected profile exist
+# 4. has the region been set
+# 5. is mfa_serial set
+# 6. is there a key and secret
+
+if [ $# -gt 0 ] && [ "${1:0:1}" == "-" ]; then
     while getopts 'p:t:hv' OPTION
         do
         case $OPTION in
@@ -42,6 +66,7 @@ if [ $# -gt 0 ] && [ "${1:0:1}" == "-" ]; then
         esac
     done
 else
+    checkProfile $AWS_PROFILE
     if [ $# == 0 ]; then
         read -p 'Token ' TOKEN
         exit 1
