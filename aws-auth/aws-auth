@@ -13,23 +13,32 @@ MFA_ROLE=
 PROFILE=
 IAM_USER=
 TOKEN=
-DEFAULT=
 DURATION=129600
 OVERRIDE_PROFILE=0
+DEFAULT_PROFILE="default"
+PREFLIGHT_EXIT_CHECKS=0
 
-function checkProfile(){
-    PROFILE=$1
-    # does profile exist and not empty?
-    if [ $PROFILE ] || [ -z "$PROFILE" ] || [ "$PROFILE" == "" ]; then
-        echo "Profile not found"
+function checkProfile() {
+    local AWS_PROFILE=$1
+    local PROFILE=$2
+    # echo "Checking profile"
+    # does profile exist and not empty? 
+    if [ $AWS_PROFILE ]; then
+        # AWS_PROFILE is set.
+        # echo "\$AWS_PROFILE set"
+        if [ -z "$AWS_PROFILE" ] && [ -z "$PROFILE" ]; then
+            # echo "\$AWS_PROFILE empty"
+            # echo "\$PROFILE empty"
+            echo "$DEFAULT_PROFILE"
+            exit 12
+        fi
+    elif [ -z "$PROFILE" ]; then
+        # echo "\$AWS_PROFILE not set"
+        # AWS_PROFILE is not set.
+        # echo "\$PROFILE empty"
+        echo "$DEFAULT_PROFILE"
         exit 11
-    else
-        echo "Profile found: $PROFILE"
     fi
-
-    # if [ $PROFILE ] && [ "$PROFILE" != "$AWS_PROFILE" ]; then
-    #     OVERRIDE_PROFILE=1
-    # fi
 }
 
 # Pre flight checks
@@ -59,14 +68,13 @@ if [ $# -gt 0 ] && [ "${1:0:1}" == "-" ]; then
         v)    printf "Version: $VERSION\n"
               exit 1
               ;;
-        '?')  printf "❌ Error: invalid option -$OPTARG\n" >&2
-              printf "❌ Error: [-p aws-profile] [-a access-token]\n" >&2
+        '?')  printf "❌ Error:\tinvalid option -$OPTARG\n" >&2
+              printf "❌ Error:\t[-p aws-profile] [-a access-token]\n" >&2
               exit 1
               ;;
         esac
     done
 else
-    checkProfile $AWS_PROFILE
     if [ $# == 0 ]; then
         read -p 'Token ' TOKEN
         exit 1
@@ -80,17 +88,24 @@ else
     PROFILE=$AWS_PROFILE
 fi 
 
+PROFILE=$(checkProfile $AWS_PROFILE $PROFILE)
+if [[ ( $? == 11  || $? == 12 ) && ( "$PR" -eq "$DEFAULT_PROFILE" ) ]]; then
+    echo "No profile detected default set"
+fi
+# unset PROFILE
+# PROFILE="$PR"
+
 if [[ ${PROFILE} =~ -mfa$ ]]; then
     # Check if profile set to mfa profile as you can't auth on this profile
     # using replace remove '-mfa'.
     PROFILE="${PROFILE/-mfa/}"
 elif [ $OVERRIDE_PROFILE == 0 ] && [ $AWS_PROFILE ] && [ -z $AWS_PROFILE ]; then
     # Check if ENV set and is empty as an empty profile causes an error
-    printf "❌ Error: Make sure to unset \$AWS_PROFILE ENV if empty.\n"
+    printf "❌ Error:\tMake sure to unset \$AWS_PROFILE ENV if empty.\n"
     exit 1
 elif [ -z "$PROFILE" ]; then
     # Look for empty profile and set default profile
-    PROFILE="default"
+    PROFILE="$DEFAULT_PROFILE"
     #elif [ -z $AWS_PROFILE ]; then
     #  echo "❌ Error: \$AWS_PROFILE can not be empty"
     #  echo "   - Either set a profile or unset \$AWS_PROFILE"
@@ -99,25 +114,26 @@ fi
 
 # Set the mfa profile
 MFA_ROLE="$PROFILE-mfa"
-printf "✅ Profile:\t$PROFILE\n"
 
 export AWS_PROFILE_TEMP=$AWS_PROFILE
 unset AWS_PROFILE
 
 # Check profile exists in config
-SERIAL_NUMBER=$(aws --profile $PROFILE configure get mfa_serial >> dev/null 2>&1)
-if [ $? -ne 0 ]; then
-    printf "❌ Error: Profile $PROFILE isn't configured in ~/.aws/config\n"
-    exit 1
+EXISTS=$(aws --profile $PROFILE configure list) #>> dev/null 2>&1
+if [ $? -eq 255 ]; then
+    printf "❌ Profile:\t$PROFILE isn't configured in ~/.aws/config\n"
+    PREFLIGHT_EXIT_CHECKS=1
+else
+    printf "✅ Profile:\t$PROFILE\n"
 fi
 
 # Check profile mfa serial 
 SERIAL_NUMBER=$(aws --profile $PROFILE configure get mfa_serial)
 if [ $? -ne 0 ] || [ -z "$SERIAL_NUMBER" ]; then
     # Check mfa_serial doesn't exist
-    printf "❌ Error: Add mfa_serial ENV to $PROFILE profile\n"
-    printf "   - aws configure set mfa_serial <mfa_serial>\n"
-    exit 1
+    printf "❌ MFA:\t\tAdd mfa_serial ENV to $PROFILE profile\n"
+    printf "   \t\t- aws configure set mfa_serial <mfa_serial>\n"
+    PREFLIGHT_EXIT_CHECKS=1
 else
     printf "✅ MFA:\t\t$SERIAL_NUMBER\n"
 fi
@@ -127,23 +143,29 @@ KEY_PRESENT=`aws --profile $PROFILE configure get aws_access_key_id`
 
 if [ $? -ne 0 ] || [ -z "$KEY_PRESENT" ]; then
     # Check access key doesn't exist
-    printf "❌ Error: Missing aws_access_key_id\n"
+    printf "❌ ACCESS KEY:\tMissing aws_access_key_id\n"
     printf "   - aws configure set aws_access_key_id <key>\n"
-    exit 1
-else 
-    printf "✅ ACCESS KEY:\t$KEY_PRESENT\n"
+    PREFLIGHT_EXIT_CHECKS=1
+else
+    KEY_OBSCURE=${KEY_PRESENT:${#KEY_PRESENT}-3:${#KEY_PRESENT}}
+    printf "✅ ACCESS KEY:\t*****************$KEY_OBSCURE\n"
 fi
 
 # Check secret present
 SECRET_PRESENT=`aws --profile $PROFILE configure get aws_secret_access_key`
 if [ $? -ne 0 ] || [ -z "$SECRET_PRESENT" ]; then
     # Check secret key doesn't exist
-    printf "❌ Error: Missing aws_secret_access_key\n" 
+    printf "❌ SECRET:\tMissing aws_secret_access_key\n" 
     printf "   - aws configure set aws_secret_access_key <secret>\n"
-    exit 1
+    PREFLIGHT_EXIT_CHECKS=1
 else
     SEC_OBSCURE=${SECRET_PRESENT:${#SECRET_PRESENT}-3:${#SECRET_PRESENT}}
     printf "✅ SECRET:\t*****************$SEC_OBSCURE\n"
+fi
+
+if [ $PREFLIGHT_EXIT_CHECKS == 1 ]; then
+    printf "❌ Preflight:\tFailed, resolve issues above.\n"
+    exit 13
 fi
 
 read AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN <<< \
@@ -154,7 +176,7 @@ $( aws sts --profile $PROFILE get-session-token \
     --output text | awk '{ print $2, $4, $5 }')
 
 if [ -z "$AWS_ACCESS_KEY_ID" ]; then
-    printf "❌ Error: Access key not generated\n"
+    printf "❌ Error:\tAccess key not generated\n"
     exit 1
 fi
 

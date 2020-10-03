@@ -42,4 +42,7 @@ Install man page
 `gzip /usr/local/man/man1/aws-auth.1`
 
 ### exit codes
-10 = AWS cli not installed
+    10 = AWS cli not installed
+    11 = AWS_PROFILE not set and -p not set
+    12 = AWS_PROFILE set but empty and -p not set
+    13 = Failed preflight checks
