@@ -2,12 +2,8 @@
 #
 # Authenticate for aws-cli
 #
-AWS_CLI=`which aws`
-if [ $? -ne 0 ]; then
-    printf "❌ AWS CLI is not installed; exiting\n"
-    exit 10
-fi
 
+AWS_CLI="aws"
 VERSION=0.1
 MFA_ROLE=
 PROFILE=
@@ -52,7 +48,7 @@ function checkProfile() {
 # 6. is there a key and secret
 
 if [ $# -gt 0 ] && [ "${1:0:1}" == "-" ]; then
-    while getopts 'p:t:hv' OPTION
+    while getopts 'p:t:c:hv' OPTION
         do
         case $OPTION in
         p)    PROFILE="$OPTARG"
@@ -62,6 +58,8 @@ if [ $# -gt 0 ] && [ "${1:0:1}" == "-" ]; then
               ;;
         t)    TOKEN="$OPTARG"
               ;;
+        c)    OPT_AWS_CLI="$OPTARG"
+              ;;
         h)    printf "\n"
               exit 1
               ;;
@@ -70,7 +68,7 @@ if [ $# -gt 0 ] && [ "${1:0:1}" == "-" ]; then
               ;;
         '?')  printf "❌ Error:\tinvalid option -$OPTARG\n" >&2
               printf "❌ Error:\t[-p aws-profile] [-a access-token]\n" >&2
-              exit 1
+              exit 14
               ;;
         esac
     done
@@ -87,6 +85,22 @@ else
     # default / default-mfa
     PROFILE=$AWS_PROFILE
 fi 
+
+# Order option, ENV, default
+if [ $OPT_AWS_CLI ]; then 
+    AWS_CLI=$OPT_AWS_CLI
+else
+    if [[ $AWS_AUTH_CLI_PATH && ! -z $AWS_AUTH_CLI_PATH ]]; then
+        AWS_CLI=$AWS_AUTH_CLI_PATH
+    else 
+        AWS_CLI=""
+    fi
+fi
+AWS_CLI=`which $AWS_CLI`
+if [ $? -ne 0 ]; then
+    printf "❌ AWS CLI is not installed; exiting\n"
+    exit 10
+fi
 
 PROFILE=$(checkProfile $AWS_PROFILE $PROFILE)
 if [[ ( $? == 11  || $? == 12 ) && ( "$PR" -eq "$DEFAULT_PROFILE" ) ]]; then
