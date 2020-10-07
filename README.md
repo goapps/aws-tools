@@ -45,4 +45,5 @@ Install man page
     10 = AWS cli not installed
     11 = AWS_PROFILE not set and -p not set
     12 = AWS_PROFILE set but empty and -p not set
-    13 = Failed preflight checks
+    13 = Failed pre flight checks
+    14 = Empty option
