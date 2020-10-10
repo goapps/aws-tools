@@ -48,7 +48,7 @@ oneTimeSetUp() {
 # load shunit2
 sh2=`which shunit2`
 if [ $? -ne 0 ]; then
-    . sh2
-else
     . shunit2
+else
+    . sh2
 fi
