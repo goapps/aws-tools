@@ -182,30 +182,8 @@ fi
 ## 2. Find the AWS CLI
 #
 findAWSCLI
-# if [ $? -ne 0 ]; then
-    # exit 0
-# fi
 
 PROFILE=$(checkProfile $AWS_PROFILE $PROFILE)
-# if [[ ( $? == 11  || $? == 12 ) && ( "$PR" -eq "$DEFAULT_PROFILE" ) ]]; then
-#     echo "No profile detected default set"
-# fi
-# case $? in
-#     1)
-#     ;;
-
-#     2)
-#     STATEMENTS
-#     ;;
-
-#     3)
-#     STATEMENTS
-#     ;;
-
-#     *)
-#     echo "Error"
-#     ;;
-# esac
 
 if [[ ${PROFILE} =~ -mfa$ ]]; then
     # Check if profile set to mfa profile as you can't auth on this profile
