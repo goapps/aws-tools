@@ -1,4 +1,7 @@
 # aws-tools
+[![Build Status](https://travis-ci.org/goapps/aws-tools.svg?branch=main)](https://travis-ci.org/goapps/aws-tools)
+[![codecov](https://codecov.io/gh/goapps/aws-tools/branch/main/graph/badge.svg)](https://codecov.io/gh/goapps/aws-tools)
+
 Set of AWS scripts for some common use cases.
 
 ## Before setup
