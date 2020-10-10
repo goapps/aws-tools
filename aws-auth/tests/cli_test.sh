@@ -8,7 +8,7 @@ testAWSCheckOptionDoesNotExist() {
 
 testAWSCheckOptionDoesExist() {
     aws-auth/aws-auth -c ls >> $stdoutF 2>&1
-    assertEquals 1 $?
+    assertTrue "[[ ( 1 == $? ) || ( 13 == $? ) ]]"
 }
 
 testAWSCheckOptionEmpty() {
@@ -25,7 +25,7 @@ testAWSCheckENVDoesNotExist() {
 testAWSCheckENVExist() {
     export AWS_AUTH_CLI_PATH="ls"
     aws-auth/aws-auth 123456 >> $stdoutF 2>&1
-    assertEquals 1 $?
+    assertTrue "[[ ( 1 == $? ) || ( 13 == $? ) ]]"
 }
 
 tearDown() {
@@ -50,5 +50,5 @@ sh2=`which shunit2`
 if [ $? -ne 0 ]; then
     . shunit2/src/shunit2
 else
-    . sh2
+    . $sh2
 fi
