@@ -5,3 +5,5 @@ before_script:
     - mv shunit2-2.1.6/ shunit2
 script:
     - bash aws-auth/tests/cli_test.sh
+after_script:
+    - bash <(curl -s https://codecov.io/bash)
