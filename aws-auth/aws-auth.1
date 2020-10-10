@@ -1,0 +1,35 @@
+.\" Manpage for aws-auth.
+.\" Create PR to correct errors or typos.
+.TH man 1 "01 Oct 2020" "0.1" "nuseradd man page"
+.SH NAME
+aws-auth \- authenticates a cli user
+.SH SYNOPSIS
+aws-auth [TOKEN] set $AWS_PROFILE to use just a token.
+
+aws-auth -p [PROFILE] -t [TOKEN] -v
+.SH DESCRIPTION
+aws-auth is a script to make it easy to authenticate in a MFA way for cli access.
+
+Ensure a named profile has been configured with a key and secret, and IAM mfa_serial.
+
+The script creates a new profile by appending -mfa to the profile name and stores this in the creditionals file.
+
+When authenticating if $AWS_PROFILE is set to the -mfa profile it automatially will authenticate against the matchiing profile (the profile name without -mfa).
+
+(https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html)
+.SH OPTIONS
+.TP 4
+.B -p <profile>
+The is the profile named in  ~/.aws/config, using this will override the ENV value set in $AWS_PROFILE.
+.TP
+.B -t <token>
+This is the one time token.
+.TP
+.B -c
+Location of aws-cli. Also set with $AWS_AUTH_CLI_PATH
+.TP
+.B -v 
+Script version.
+.TP
+.SH AUTHOR
+Will Maginn (wj.maginn@gmail.com)
