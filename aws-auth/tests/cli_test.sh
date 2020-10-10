@@ -1,5 +1,5 @@
 #! /bin/sh
-# file: examples/party_test.sh
+# file: tests/cli_test.sh
 
 testAWSCheckOptionDoesNotExist() {
     ../aws-auth -c /usr/does-not-exist >> $stdoutF 2>&1

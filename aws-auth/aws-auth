@@ -37,6 +37,10 @@ function checkProfile() {
     #  S! |  S  |     |  -  |  3  |
     #  S! |  S! |     |     |  3  |
     #==============================
+    if [ $OVERRIDE_PROFILE == 1 ]; then
+        echo "$PROFILE"
+        exit 0
+    fi
 
     if [ $AWS_PROFILE ]; then
         if [ $PROFILE ]; then
@@ -87,18 +91,23 @@ function checkProfile() {
 ## Order option, ENV, default
 #
 function findAWSCLI() {
+    # If -c is an option use
+    # otherwise look in for the ENV AWS_AUTH_CLI_PATH
+    # else try the default 
+
     if [ $OPT_AWS_CLI ]; then 
         AWS_CLI=$OPT_AWS_CLI
-    else
-        if [[ $AWS_AUTH_CLI_PATH && ! -z $AWS_AUTH_CLI_PATH ]]; then
+    else 
+        if [ $AWS_AUTH_CLI_PATH ]; then
             AWS_CLI=$AWS_AUTH_CLI_PATH
-        else 
-            AWS_CLI=""
+        elif [ -z "${AWS_AUTH_CLI_PATH-unset}" ]; then
+            printf "❌ AWS CLI not found at: $AWS_AUTH_CLI_PATH\n"
+            exit 10
         fi
     fi
     AWS_CLI=`which $AWS_CLI`
     if [ $? -ne 0 ]; then
-        printf "❌ AWS CLI is not installed; exiting\n"
+        printf "❌ AWS CLI not found at: $AWS_CLI\n"
         exit 10
     fi
 }
@@ -172,7 +181,10 @@ fi
 ###
 ## 2. Find the AWS CLI
 #
-#findAWSCLI
+findAWSCLI
+# if [ $? -ne 0 ]; then
+    # exit 0
+# fi
 
 PROFILE=$(checkProfile $AWS_PROFILE $PROFILE)
 # if [[ ( $? == 11  || $? == 12 ) && ( "$PR" -eq "$DEFAULT_PROFILE" ) ]]; then
@@ -194,28 +206,11 @@ PROFILE=$(checkProfile $AWS_PROFILE $PROFILE)
 #     echo "Error"
 #     ;;
 # esac
-echo "Profile: "
-echo $PROFILE
-exit 1
-
-# unset PROFILE
-# PROFILE="$PR"
 
 if [[ ${PROFILE} =~ -mfa$ ]]; then
     # Check if profile set to mfa profile as you can't auth on this profile
     # using replace remove '-mfa'.
     PROFILE="${PROFILE/-mfa/}"
-elif [ $OVERRIDE_PROFILE == 0 ] && [ $AWS_PROFILE ] && [ -z $AWS_PROFILE ]; then
-    # Check if ENV set and is empty as an empty profile causes an error
-    printf "❌ Error:\tMake sure to unset \$AWS_PROFILE ENV if empty.\n"
-    exit 1
-elif [ -z "$PROFILE" ]; then
-    # Look for empty profile and set default profile
-    PROFILE="$DEFAULT_PROFILE"
-    #elif [ -z $AWS_PROFILE ]; then
-    #  echo "❌ Error: \$AWS_PROFILE can not be empty"
-    #  echo "   - Either set a profile or unset \$AWS_PROFILE"
-    #  exit 1
 fi
 
 # Set the mfa profile
